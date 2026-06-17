@@ -579,12 +579,11 @@ cp "$TEX_PDF_SRC" "$OUTDIR/$PDF_NAME"
 ok "PDF: ${OUTDIR}/${PDF_NAME}"
 
 # ── Open? ───────────────────────────────────────────────────
-echo ""
-echo "  [1] Open PDF"
+echo "Next:"
+echo "  [1] Open PDF (default = [Enter])"
 echo "  [2] Open PDF folder"
 echo "  [3] Exit"
-echo ""
-read -r -p "? Choose [1]: " ans
+read -r -p "? " ans
 ans="${ans:-1}"
 case "$ans" in
     1)
