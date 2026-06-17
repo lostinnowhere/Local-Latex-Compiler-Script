@@ -579,15 +579,31 @@ cp "$TEX_PDF_SRC" "$OUTDIR/$PDF_NAME"
 ok "PDF: ${OUTDIR}/${PDF_NAME}"
 
 # ── Open? ───────────────────────────────────────────────────
-read -r -p "? Open PDF? [Y/n] " ans
-if [[ ! "$ans" =~ ^[Nn] ]]; then
-    if [ "$HAS_OPEN_CMD" = true ]; then
-        $OPEN_CMD "$OUTDIR/$PDF_NAME" &>/dev/null || \
+echo ""
+echo "  [1] Open PDF"
+echo "  [2] Open PDF folder"
+echo "  [3] Exit"
+echo ""
+read -r -p "? Choose [1]: " ans
+ans="${ans:-1}"
+case "$ans" in
+    1)
+        if [ "$HAS_OPEN_CMD" = true ]; then
+            $OPEN_CMD "$OUTDIR/$PDF_NAME" &>/dev/null || \
+                info "File at: $OUTDIR/$PDF_NAME"
+        else
             info "File at: $OUTDIR/$PDF_NAME"
-    else
-        info "File at: $OUTDIR/$PDF_NAME"
-    fi
-fi
+        fi
+        ;;
+    2)
+        if [ "$HAS_OPEN_CMD" = true ]; then
+            $OPEN_CMD "$OUTDIR" &>/dev/null || \
+                info "Folder: $OUTDIR"
+        else
+            info "Folder: $OUTDIR"
+        fi
+        ;;
+esac
 
 echo ""
 ok "All done."
