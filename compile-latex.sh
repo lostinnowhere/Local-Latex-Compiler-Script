@@ -468,10 +468,16 @@ fi
 if [ "$ENGINE" != "pdflatex" ]; then
     # Babel makes " an active shorthand in many languages (French, German,
     # Vietnamese, Catalan, etc.), breaking literal ASCII quotes in the source.
-    # Disable " shorthand globally so quotes pass through to the output unchanged.
+    # Workaround: replace ASCII "..." with Unicode curly quotes in all .tex files.
+    # This bypasses babel's active " shorthand completely.
+    find "$EXTRACT_DIR" -name '*.tex' -exec perl -CSD -i -pe \
+        's/\x{0022}(.*?)\x{0022}/\x{201C}$1\x{201D}/g' {} \; 2>/dev/null || true
+    ok 'Replaced ASCII quotes with Unicode curly quotes for XeLaTeX compatibility.'
+
+    # Also add \shorthandoff{"} in case any " slips through (e.g., in code listings).
     if grep -q '^[^%]*\\usepackage\[.*\]{babel}' "$ROOT_TEX" 2>/dev/null; then
         sed -i '/^[^%]*\\usepackage\[.*\]{babel}/a \\\shorthandoff{"}' "$ROOT_TEX"
-        ok 'Disabled babel " shorthand (avoids conflicts with literal quotes).'
+        ok 'Disabled babel " shorthand as a safety measure.'
     fi
 
     # \usepackage{lmodern} overrides \setmainfont.
