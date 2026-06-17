@@ -9,10 +9,10 @@ Compile LaTeX projects on Linux using Docker — no local TeX Live needed. Works
 - **Engine auto-detection** — detects `pdflatex`, `xelatex`, or `lualatex` from your preamble
 - **Bibliography auto-detection** — picks `bibtex` or `biber` automatically
 - **Makeindex / nomencl support** — detected and handled when present
-- **Font handling** — mounts host fonts into the container; re-asserts `\setmainfont` after `\usepackage{lmodern}` overrides it
+- **Font handling** — mounts host fonts into the container; detects any unreferenced fonts and offers to substitute with safe DejaVu defaults
 - **Babel compatibility** — disables active `"` shorthands for XeLaTeX/LuaLaTeX (fixes French, German, Vietnamese, Catalan, and other babel languages)
 - **CRLF fix** — normalizes Windows line endings in `.tex`, `.cls`, `.sty`, `.bst` files
-- **Font fallback** — prompts to replace `Times New Roman` with a fallback if the font is not available
+- **Font fallback** — detects fontspec `\setmainfont` / `\setromanfont` / `\setsansfont` / `\setmonofont` commands referencing fonts not available on your system and offers to substitute them with DejaVu Serif / Sans / Sans Mono
 - **Auto-cleanup** — temp directories are removed on exit (even on Ctrl+C)
 - **Docker image cache** — keeps the image locally; auto-updates when a newer version exists
 - **Distro-agnostic** — detects your package manager (apt, dnf, pacman, zypper) for dependency installation
@@ -41,8 +41,7 @@ The script will guide you through:
 1. **Input** — path to your `.zip` or project folder
 2. **Output directory** — where to save the compiled PDF
 3. **PDF filename** — name for the output file
-4. **Font fallback** — prompted only if Times New Roman is not found on your system
-5. **Compilation** — shows detected settings and asks for confirmation
+4. **Compilation** — shows detected settings and asks for confirmation
 
 ## How it works
 
@@ -74,7 +73,7 @@ The script will guide you through:
 | Problem | Likely cause |
 |---|---|
 | `Docker daemon unreachable` | Docker is not running. The script can start it via `systemctl` or `service`. |
-| `Times New Roman` not found | The font is not installed on your host system. The script will prompt for a fallback. |
+| Font not found (e.g., Times New Roman) | The font is not on your system. The script detects missing fonts and offers DejaVu as a fallback. |
 | Compilation fails with cryptic errors | Check the error log saved alongside the PDF. Missing packages? Try a more recent `texlive` image tag. |
 | `"` quotes appear as weird characters | The script disables babel's `"` shorthand automatically. If the issue persists, check your `.tex` for other active characters. |
 

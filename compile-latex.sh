@@ -345,19 +345,9 @@ read -r -p "? Output PDF filename [${DEFAULT_PDF_NAME}]: " PDF_NAME
 PDF_NAME="${PDF_NAME:-$DEFAULT_PDF_NAME}"
 ok "PDF name: $PDF_NAME"
 
-# Font substitution (only needed if "Times New Roman" isn't on your system)
-USE_CUSTOM_FONT=false
-CUSTOM_FONT=""
-if [ -f /usr/share/fonts/TTF/Times.TTF ]; then
-    ok "Times New Roman found on host — will mount into container."
-else
-    read -r -p "? Replace 'Times New Roman' with a fallback font? (recommended) [Y/n] " ans
-    if [[ ! "$ans" =~ ^[Nn] ]]; then
-        USE_CUSTOM_FONT=true
-        read -r -p "? Fallback font name [DejaVu Serif]: " CUSTOM_FONT
-        CUSTOM_FONT="${CUSTOM_FONT:-DejaVu Serif}"
-    fi
-fi
+# Font mounting — host fonts are mounted into the container automatically
+# if the directory exists. Font-specific fallbacks are handled after
+# project detection (see "Font patching" in section 3).
 
 # ============================================================
 # 3. DETECT PROJECT STRUCTURE
@@ -426,13 +416,51 @@ grep -q '\\makeindex' "$ROOT_TEX" 2>/dev/null && NEEDS_MAKEINDEX=true
 grep -q '\\printnomenclature\|\\printglossary' "$ROOT_TEX" 2>/dev/null && NEEDS_MAKEINDEX=true
 $NEEDS_MAKEINDEX && ok "Makeindex/nomencl: yes"
 
-# Font patching
-if $USE_CUSTOM_FONT; then
-    if grep -q '\\setmainfont{Times New Roman}' "$ROOT_TEX" 2>/dev/null; then
-        sed -i 's/\\setmainfont{Times New Roman}/\\setmainfont{'"$CUSTOM_FONT"'}/' "$ROOT_TEX"
-        ok "Patched font to $CUSTOM_FONT"
-    else
-        warn "Font 'Times New Roman' not found in $ROOT_REL — skipping."
+# ── Font availability check ────────────────────────────
+# Scan for fontspec font commands and check if each
+# referenced font is available. Unavailable fonts are
+# substituted with safe DejaVu defaults.
+
+FONT_SUBSTITUTED=""  # tracks main serif font for lmodern fix
+
+if command -v fc-list &>/dev/null && [ "$ENGINE" != "pdflatex" ]; then
+    FONT_PATCH_CMDS=()
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        cmd="${line%%\{*}"
+        name="${line#*\{}"
+        name="${name%\}}"
+        # Check if font is available on the host
+        if ! fc-list "$name" &>/dev/null 2>/dev/null; then
+            case "$cmd" in
+                *setmonofont*) fallback="DejaVu Sans Mono" ;;
+                *setsansfont*) fallback="DejaVu Sans" ;;
+                *)             fallback="DejaVu Serif" ;;
+            esac
+            FONT_PATCH_CMDS+=("$cmd|$name|$fallback")
+        fi
+    done < <(grep -oE '\\set(main|roman|sans|mono)font\{[^}]+\}' "$ROOT_TEX" 2>/dev/null || true)
+
+    if [ ${#FONT_PATCH_CMDS[@]} -gt 0 ]; then
+        echo ""
+        warn "Fonts in your document are not available on this system:"
+        for entry in "${FONT_PATCH_CMDS[@]}"; do
+            IFS='|' read -r cmd original fallback <<< "$entry"
+            echo "    • ${original} (used by ${cmd})"
+        done
+        echo ""
+        read -r -p "? Substitute with DejaVu fonts (recommended)? [Y/n] " ans
+        if [[ ! "$ans" =~ ^[Nn] ]]; then
+            for entry in "${FONT_PATCH_CMDS[@]}"; do
+                IFS='|' read -r cmd original fallback <<< "$entry"
+                sed -i "s/${cmd}{${original}}/${cmd}{${fallback}}/" "$ROOT_TEX"
+                ok "Substituted '$original' → '$fallback'"
+                if [ -z "$FONT_SUBSTITUTED" ] && \
+                    { [[ "$cmd" == *"setmainfont"* ]] || [[ "$cmd" == *"setromanfont"* ]]; }; then
+                    FONT_SUBSTITUTED="$fallback"
+                fi
+            done
+        fi
     fi
 fi
 
@@ -446,11 +474,12 @@ if [ "$ENGINE" != "pdflatex" ]; then
         ok 'Disabled babel " shorthand (avoids conflicts with literal quotes).'
     fi
 
-    # \usepackage{lmodern} overrides \setmainfont{Times New Roman}.
-    # Re-assert Times New Roman after lmodern is loaded.
+    # \usepackage{lmodern} overrides \setmainfont.
+    # Re-assert the substituted (or original) main font after lmodern.
+    FONT_TO_ASSERT="${FONT_SUBSTITUTED:-Times New Roman}"
     if grep -q '^[^%]*\\usepackage{lmodern}' "$ROOT_TEX" 2>/dev/null; then
-        sed -i '/^[^%]*\\usepackage{lmodern}/a \\\setmainfont{Times New Roman}' "$ROOT_TEX"
-        ok 'Re-asserted Times New Roman after lmodern override.'
+        sed -i "/^[^%]*\\usepackage{lmodern}/a \\\\\\setmainfont{$FONT_TO_ASSERT}" "$ROOT_TEX"
+        ok "Re-asserted '$FONT_TO_ASSERT' after lmodern override."
     fi
 fi
 
@@ -473,7 +502,6 @@ echo "  Root file:      ${BOLD}$ROOT_REL${NC}"
 echo "  Engine:         ${BOLD}$ENGINE${NC}"
 echo "  Bibliography:   ${BOLD}$BIBTOOL${NC}"
 echo "  Makeindex:      ${BOLD}$NEEDS_MAKEINDEX${NC}"
-echo "  Font override:  ${BOLD}$USE_CUSTOM_FONT${NC}"
 echo ""
 
 read -r -p "? Start compilation? [Y/n] " ans
