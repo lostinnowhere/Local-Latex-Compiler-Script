@@ -3,9 +3,11 @@
 # compile-latex.sh — Compile any LaTeX project (zip/folder) locally using Docker
 #
 # Usage:
-#   ./compile-latex.sh [IMAGE_TAG]
-#   ./compile-latex.sh texlive/texlive:2025     # pin a specific year tag
-#   ./compile-latex.sh --help                    # show help
+#   ./compile-latex.sh [INPUT] [OUTPUT_DIR] [IMAGE_TAG]
+#   ./compile-latex.sh project.zip ./output               # positional args
+#   ./compile-latex.sh project.zip ./output texlive/texlive:2025
+#   ./compile-latex.sh texlive/texlive:2025                # pin image, interactive input
+#   ./compile-latex.sh --help                              # show help
 
 set -eo pipefail
 
@@ -18,9 +20,11 @@ for arg in "$@"; do
         echo "compile-latex.sh — Compile LaTeX projects locally using Docker"
         echo ""
         echo "USAGE"
-        echo "  ./compile-latex.sh [IMAGE_TAG]"
+        echo "  ./compile-latex.sh [INPUT] [OUTPUT_DIR] [IMAGE_TAG]"
         echo ""
-        echo "  IMAGE_TAG  Docker image to use (default: texlive/texlive:latest)"
+        echo "  INPUT      .zip file or project folder (interactive if omitted)"
+        echo "  OUTPUT_DIR destination directory (interactive if omitted)"
+        echo "  IMAGE_TAG  Docker image (default: texlive/texlive:latest)"
         echo ""
         echo "WHAT IT DOES"
         echo "  1. Accepts a .zip (Overleaf export) or a local folder"
@@ -36,6 +40,8 @@ for arg in "$@"; do
         echo ""
         echo "EXAMPLES"
         echo "  ./compile-latex.sh"
+        echo "  ./compile-latex.sh project.zip ./output"
+        echo "  ./compile-latex.sh project.zip ./output texlive/texlive:2025"
         echo "  ./compile-latex.sh texlive/texlive:2025"
         echo ""
         exit 0
@@ -45,9 +51,22 @@ done
 # ============================================================
 # CONFIG
 # ============================================================
-DOCKER_IMAGE="${1:-texlive/texlive:latest}"
+DOCKER_IMAGE="texlive/texlive:latest"
 SUDO_DOCKER=false
 EXTRACT_DIR=""
+
+# Detect positional arguments (input, output dir, image tag)
+DEFAULT_INPUT=""
+DEFAULT_OUTDIR_ARG=""
+if [ -n "$1" ]; then
+    if [ -f "$1" ] || [ -d "$1" ]; then
+        DEFAULT_INPUT="$1"
+        [ -n "$2" ] && DEFAULT_OUTDIR_ARG="$2"
+        [ -n "$3" ] && DOCKER_IMAGE="$3"
+    else
+        DOCKER_IMAGE="$1"
+    fi
+fi
 
 # ============================================================
 # TRAP — guarantee no leftover temp dirs
@@ -313,7 +332,7 @@ fi
 header "INPUT SETUP"
 
 # Input zip or folder
-INPUT=""
+INPUT="$DEFAULT_INPUT"
 while [ -z "$INPUT" ]; do
     read -r -p "? Path to .zip or folder: " INPUT
     INPUT="${INPUT/#\~/$HOME}"
@@ -329,10 +348,14 @@ done
 ok "Input: $INPUT"
 
 # Output directory (default: same directory as the input)
-DEFAULT_OUTDIR="$(dirname "$(resolve_path "$INPUT")")"
-read -r -p "? Output directory [enter to use ${DEFAULT_OUTDIR}]: " OUTDIR
-OUTDIR="${OUTDIR/#\~/$HOME}"
-OUTDIR="${OUTDIR:-$DEFAULT_OUTDIR}"
+DEFAULT_OUTDIR="${DEFAULT_OUTDIR_ARG:-$(dirname "$(resolve_path "$INPUT")")}"
+if [ -n "$DEFAULT_OUTDIR_ARG" ]; then
+    OUTDIR="$DEFAULT_OUTDIR_ARG"
+else
+    read -r -p "? Output directory [enter to use ${DEFAULT_OUTDIR}]: " OUTDIR
+    OUTDIR="${OUTDIR/#\~/$HOME}"
+    OUTDIR="${OUTDIR:-$DEFAULT_OUTDIR}"
+fi
 mkdir -p "$OUTDIR"
 OUTDIR="$(resolve_path "$OUTDIR")"
 ok "Output: $OUTDIR"
@@ -453,7 +476,8 @@ if command -v fc-list &>/dev/null && [ "$ENGINE" != "pdflatex" ]; then
         if [[ ! "$ans" =~ ^[Nn] ]]; then
             for entry in "${FONT_PATCH_CMDS[@]}"; do
                 IFS='|' read -r cmd original fallback <<< "$entry"
-                sed -i "s/${cmd}{${original}}/${cmd}{${fallback}}/" "$ROOT_TEX"
+                sed_cmd='s/\\'"${cmd#\\}"'{'"${original}"'}/\\'"${cmd#\\}"'{'"${fallback}"'}/'
+                sed -i "$sed_cmd" "$ROOT_TEX"
                 ok "Substituted '$original' → '$fallback'"
                 if [ -z "$FONT_SUBSTITUTED" ] && \
                     { [[ "$cmd" == *"setmainfont"* ]] || [[ "$cmd" == *"setromanfont"* ]]; }; then

@@ -29,7 +29,13 @@ Compile LaTeX projects on Linux using Docker — no local TeX Live needed. Works
 # Run interactively (prompts for inputs)
 ./compile-latex.sh
 
+# Pass input and output as positional arguments
+./compile-latex.sh project.zip ./output
+
 # Pin a specific TeX Live release
+./compile-latex.sh project.zip ./output texlive/texlive:2025
+
+# Or just the image tag — input/output will be prompted
 ./compile-latex.sh texlive/texlive:2025
 
 # Show help
