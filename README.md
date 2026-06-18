@@ -25,15 +25,20 @@ Compile LaTeX projects on Linux using Docker — no local TeX Live needed. Works
 
 ## Quick run (no download)
 
+**Pipe to bash (interactive):**
+
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/lostinnowhere/Local-Latex-Compiler-Script/main/compile-latex.sh)
 ```
 
-Or download to a temp file (allows passing arguments):
+**Download then run (supports arguments):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lostinnowhere/Local-Latex-Compiler-Script/main/compile-latex.sh -o /tmp/compile-latex.sh && \
-  bash /tmp/compile-latex.sh project.zip ./output
+curl -fsSL https://raw.githubusercontent.com/lostinnowhere/Local-Latex-Compiler-Script/main/compile-latex.sh -o /tmp/compile-latex.sh
+```
+
+```bash
+bash /tmp/compile-latex.sh project.zip ./output
 ```
 
 ## Usage
